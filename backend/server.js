@@ -12,15 +12,29 @@ const errorHandler = require('./middleware/errorHandler');
 const app = express();
 const server = http.createServer(app);
 
-// ─── Socket.io Setup ─────────────────────────────────────────────────────────
-const io = new Server(server, {
-    cors: {
-        origin: process.env.CLIENT_URL || 'http://localhost:5173',
-        methods: ['GET', 'POST', 'PATCH'],
-    },
-});
+// ─── CORS Allowed Origins ────────────────────────────────────────────────────
+const allowedOrigins = [
+    'http://localhost:5173',
+    'http://localhost:3000',
+    process.env.CLIENT_URL,
+    'https://expert-session-booking-ac49.vercel.app',
+].filter(Boolean);
 
-// Make io accessible in controllers via req.app.get('io')
+const corsOptions = {
+    origin: (origin, callback) => {
+        if (!origin) return callback(null, true);
+        if (allowedOrigins.includes(origin) || origin.endsWith('.vercel.app')) {
+            return callback(null, true);
+        }
+        callback(new Error(`CORS blocked: ${origin}`));
+    },
+    methods: ['GET', 'POST', 'PATCH', 'DELETE'],
+    credentials: true,
+};
+
+// ─── Socket.io Setup ─────────────────────────────────────────────────────────
+const io = new Server(server, { cors: corsOptions });
+
 app.set('io', io);
 
 io.on('connection', (socket) => {
@@ -34,13 +48,7 @@ io.on('connection', (socket) => {
 connectDB();
 
 // ─── Middleware ───────────────────────────────────────────────────────────────
-app.use(
-    cors({
-        origin: process.env.CLIENT_URL || 'http://localhost:5173',
-        methods: ['GET', 'POST', 'PATCH', 'DELETE'],
-        credentials: true,
-    })
-);
+app.use(cors(corsOptions));
 app.use(express.json());
 
 // ─── Routes ───────────────────────────────────────────────────────────────────
@@ -52,7 +60,7 @@ app.get('/api/health', (req, res) => {
     res.json({ success: true, message: 'Expert Session Booking API is running! 🚀' });
 });
 
-// 404 handler for unknown routes
+// 404 handler
 app.use((req, res) => {
     res.status(404).json({ success: false, message: `Route ${req.originalUrl} not found` });
 });
